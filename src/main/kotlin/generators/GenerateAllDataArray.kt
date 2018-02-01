@@ -27,7 +27,7 @@ fun main(args: Array<String>) {
     val rawResults = dbmapper.parallelScan(ViewerData::class.java, DynamoDBScanExpression(), 12)
 
     val klax = Klaxon()
-    val vd = File("viewerData.json");
+    val vd = File("viewerData.json")
 
     vd.bufferedWriter().use { out ->
         out.write(klax.toJsonString(rawResults))
