@@ -9,7 +9,6 @@ import com.amazonaws.services.s3.model.CannedAccessControlList
 import com.amazonaws.services.s3.model.ObjectMetadata
 import com.amazonaws.services.s3.model.PutObjectRequest
 import models.ViewerData
-import java.io.BufferedWriter
 import java.io.File
 import java.util.zip.GZIPOutputStream
 import kotlin.reflect.KProperty1
@@ -33,66 +32,63 @@ fun main(args: Array<String>) {
     val rawResults = dbmapper.parallelScan(ViewerData::class.java, DynamoDBScanExpression(), 12)
 
     val ignoreThese = listOf("parcelId", "lat", "lng")
-    val files: MutableMap<String, Pair<File, BufferedWriter>> = mutableMapOf()
-    val smallFiles: MutableMap<String, Pair<File, BufferedWriter>> = mutableMapOf()
-    ViewerData::class.memberProperties
-            .filterNot { ignoreThese.contains(it.name) }
-            .forEach {
-                val file = File("${it.name}.json.gz")
-                val smallFile = File("${it.name}-small.json.gz")
-                val out = GZIPOutputStream(file.outputStream()).bufferedWriter(UTF_8)
-                val smallOut = GZIPOutputStream(smallFile.outputStream()).bufferedWriter(UTF_8)
-                out.write("""{
+    val file = File("alldata.json.gz")
+    val smallFile = File("alldata-small.json.gz")
+    val out = GZIPOutputStream(file.outputStream()).bufferedWriter(UTF_8)
+    val smallOut = GZIPOutputStream(smallFile.outputStream()).bufferedWriter(UTF_8)
+    out.write("""{
                 "type": "FeatureCollection",
                 "features": [""".trimIndent())
-                smallOut.write("""{
+    smallOut.write("""{
                 "type": "FeatureCollection",
                 "features": [""".trimIndent())
-
-                files[it.name] = Pair(file, out)
-                smallFiles[it.name] = Pair(smallFile, smallOut)
-            }
 
     val resultsIter = rawResults.iterator()
     var count = 0
     while (resultsIter.hasNext()) {
         val video = resultsIter.next()!!
-        for (member in video::class.memberProperties) {
-            if (!ignoreThese.contains(member.name)) {
-                val weight = (member as KProperty1<ViewerData, Any?>).get(video)
-                if (weight != null && video.lat != null && video.lng != null) {
-                    files[member.name]?.second?.write("""{
-                        "type": "Feature",
-                        "properties": {
-                            "weight": $weight,
-                            "id": "${video.parcelId}"
-                        },
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [ ${video.lng}, ${video.lat} ]
-                        }}""".trimIndent()
-                    )
-                    if (resultsIter.hasNext())
-                        files[member.name]?.second?.write(",")
-
-                    if (count < 25) {
-                        smallFiles[member.name]?.second?.write("""{
-                        "type": "Feature",
-                        "properties": {
-                            "weight": $weight,
-                            "id": "${video.parcelId}"
-                        },
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [ ${video.lng}, ${video.lat} ]
-                        }}""".trimIndent()
-                        )
-                        if (resultsIter.hasNext() && count < 24)
-                            smallFiles[member.name]?.second?.write(",")
+        if (video.lat != null && video.lng != null) {
+            var propertyString = """
+            "lng": "${video.lng}",
+            "lat": "${video.lat}",
+            "id": "${video.parcelId}""""
+            for (member in video::class.memberProperties) {
+                if (!ignoreThese.contains(member.name)) {
+                    val weight = (member as KProperty1<ViewerData, Any?>).get(video)
+                    if (weight != null) {
+                        propertyString = """$propertyString,
+                            "${member.name}": $weight"""
                     }
-
                 }
             }
+            out.write("""{
+                        "type": "Feature",
+                        "properties": {
+                            $propertyString,
+                        },
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [ ${video.lng}, ${video.lat} ]
+                        }}""".trimIndent()
+            )
+            if (resultsIter.hasNext())
+                out.write(",")
+
+            if (count < 25) {
+                smallOut.write("""{
+                        "type": "Feature",
+                        "properties": {
+                        $propertyString
+                        },
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [ ${video.lng}, ${video.lat} ]
+                        }}""".trimIndent()
+                )
+                if (resultsIter.hasNext() && count < 24)
+                    smallOut.write(",")
+            }
+
         }
         count++
     }
@@ -101,41 +97,37 @@ fun main(args: Array<String>) {
             .withCredentials(ProfileCredentialsProvider("spatial-data"))
             .build()
 
-    ViewerData::class.memberProperties
-            .filterNot { ignoreThese.contains(it.name) }
-            .forEach {
-                //close the geojson object and features array
-                files[it.name]?.second?.write("]}")
-                files[it.name]?.second?.close()
-                smallFiles[it.name]?.second?.write("]}")
-                smallFiles[it.name]?.second?.close()
+//close the geojson object and features array
+    out.write("]}")
+    out.close()
+    smallOut.write("]}")
+    smallOut.close()
 
-                //upload to s3
-                println("sending ${it.name} | ${files[it.name]?.first}")
-                val md = ObjectMetadata()
-                md.contentType = "application/json"
-                md.contentEncoding = "gzip"
-                s3.putObject(
-                        PutObjectRequest(
-                                "spatial-data-web-support",
-                                "${it.name}.json.gz",
-                                files[it.name]?.first!!.inputStream(),
-                                md
-                        ).withCannedAcl(CannedAccessControlList.PublicRead)
-                )
-                println("sending ${it.name} | ${smallFiles[it.name]?.first}")
-                val smd = ObjectMetadata()
-                smd.contentType = "application/json"
-                smd.contentEncoding = "gzip"
-                s3.putObject(
-                        PutObjectRequest(
-                                "spatial-data-web-support",
-                                "${it.name}-small.json.gz",
-                                smallFiles[it.name]?.first!!.inputStream(),
-                                smd
-                        ).withCannedAcl(CannedAccessControlList.PublicRead)
-                )
+//upload to s3
+    println("sending alldata | $file")
+    val md = ObjectMetadata()
+    md.contentType = "application/json"
+    md.contentEncoding = "gzip"
+    s3.putObject(
+            PutObjectRequest(
+                    "spatial-data-web-support",
+                    "alldata.json.gz",
+                    file.inputStream(),
+                    md
+            ).withCannedAcl(CannedAccessControlList.PublicRead)
+    )
+    println("sending alldata-small | $smallFile")
+    val smd = ObjectMetadata()
+    smd.contentType = "application/json"
+    smd.contentEncoding = "gzip"
+    s3.putObject(
+            PutObjectRequest(
+                    "spatial-data-web-support",
+                    "alldata-small.json.gz",
+                    smallFile.inputStream(),
+                    smd
+            ).withCannedAcl(CannedAccessControlList.PublicRead)
+    )
 
-                files[it.name]?.first?.delete()
-            }
+    file.delete()
 }
