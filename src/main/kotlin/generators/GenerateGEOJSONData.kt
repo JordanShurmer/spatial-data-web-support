@@ -43,6 +43,8 @@ fun main(args: Array<String>) {
                 "type": "FeatureCollection",
                 "features": [""".trimIndent())
 
+    val propOut = File("props.txt").bufferedWriter()
+
     val resultsIter = rawResults.iterator()
     var count = 0
     while (resultsIter.hasNext()) {
@@ -55,16 +57,20 @@ fun main(args: Array<String>) {
             for (member in video::class.memberProperties) {
                 if (!ignoreThese.contains(member.name)) {
                     val weight = (member as KProperty1<ViewerData, Any?>).get(video)
-                    if (weight != null) {
-                        propertyString = """$propertyString,
-                            "${member.name}": $weight"""
+                    if (weight != null && weight.toString().isNotEmpty()) {
+                        val prop = """"${member.name}": ${weight.toString()}"""
+                        if (!prop.endsWith(" ")) {
+                            propOut.write("$prop~~~\n")
+                            propertyString = """$propertyString,
+                            $prop"""
+                        }
                     }
                 }
             }
             out.write("""{
                         "type": "Feature",
                         "properties": {
-                            $propertyString,
+                            $propertyString
                         },
                         "geometry": {
                             "type": "Point",
@@ -92,6 +98,10 @@ fun main(args: Array<String>) {
         }
         count++
     }
+
+    out.flush()
+    smallOut.flush()
+    propOut.flush()
 
     val s3 = AmazonS3ClientBuilder.standard()
             .withCredentials(ProfileCredentialsProvider("spatial-data"))
