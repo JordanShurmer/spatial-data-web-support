@@ -11,6 +11,8 @@
     <properties>
         <kotlin.version>1.2.21</kotlin.version>
         <kotlin.compiler.incremental>true</kotlin.compiler.incremental>
+        <dokka.version>0.9.16</dokka.version>
+        <main.class>generators.GenerateGEOJSONDataKt</main.class>
     </properties>
 
     <pluginRepositories>
@@ -51,6 +53,16 @@
             <groupId>com.beust</groupId>
             <artifactId>klaxon</artifactId>
             <version>2.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-elasticache</artifactId>
+            <version>1.11.286</version>
+        </dependency>
+        <dependency>
+            <groupId>com.sxtanna.database</groupId>
+            <artifactId>Kedis</artifactId>
+            <version>LATEST</version>
         </dependency>
     </dependencies>
 
@@ -93,7 +105,41 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>2.6</version>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <archive>
+                                <manifest>
+                                    <mainClass>${main.class}</mainClass>
+                                </manifest>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
-    
+
+    <profiles>
+        <profile>
+            <id>kdtree</id>
+            <properties>
+                <main.class>generators.GenerateKDTree</main.class>
+            </properties>
+        </profile>
+    </profiles>
+
 </project>
