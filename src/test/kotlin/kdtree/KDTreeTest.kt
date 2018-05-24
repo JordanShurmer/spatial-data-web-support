@@ -17,7 +17,7 @@ internal class KDTreeTest {
     internal class NeighborsTest {
 
         @Test
-        fun testNeighborsClass() {
+        fun testNeighbors() {
             val neighborList = KDTree.Neighbors(3)
             val first = KDTree.Neighbor(KDNode(location = Point(1, 1)), 1.0)
             val second = KDTree.Neighbor(KDNode(location = Point(3, 4)), 25.0)
@@ -54,6 +54,12 @@ internal class KDTreeTest {
                 Point(3, 4),    //distance=5
                 Point(-3, -4)   //distance=5
         )
+
+        for (i in 3..200) {
+            for (j in 3..200) {
+                testData.add(Point(i, j))
+            }
+        }
     }
 
     @AfterEach
@@ -64,26 +70,35 @@ internal class KDTreeTest {
     fun testKDTree() {
         val tree = KDTree(testData.toMutableList())
 
-        val toCheck = Stack<KDNode>()
-        toCheck.add(tree.root)
 
-        var expectedPlane = 0
+        class nodeAndPlane(val node: KDNode, val plane: Int)
+        val toCheck = Stack<nodeAndPlane>()
+
+        toCheck.add(nodeAndPlane(tree.root, 0))
         var totalChecked = 0
         while (!toCheck.empty()) {
-            val parent = toCheck.pop()
-            val left = parent.less ?: continue
-            val right = parent.greater ?: continue
-            val actualPlane = parent.plane
-            assertEquals(expectedPlane, actualPlane, "Wrong plane")
-            assertTrue(left.location[actualPlane] <= parent.location[actualPlane], "Left is not less")
-            assertTrue(right.location[actualPlane] > parent.location[actualPlane], "Right is not more")
+            val check = toCheck.pop()
+            val parent = check.node
+            val expectedPlane = check.plane
 
-            toCheck.add(left)
-            toCheck.add(right)
-            if (totalChecked % 2 == 0)
-                expectedPlane = (expectedPlane + 1) % 2
+            val actualPlane = parent.plane
+            assertEquals(expectedPlane, actualPlane, "Wrong plane for node $parent")
+
+            parent.less?.let {
+                assertTrue(it.location[actualPlane] <= parent.location[actualPlane], "'Less' node $it is not less than $parent")
+                toCheck.add(nodeAndPlane(it, (expectedPlane + 1) % 2))
+            }
+
+            parent.greater?.let {
+                assertTrue(it.location[actualPlane] > parent.location[actualPlane], "'Greater' node $it is not greater than $parent")
+                toCheck.add(nodeAndPlane(it, (expectedPlane + 1) % 2))
+            }
+
+
             totalChecked++
         }
+
+        assertEquals(testData.size, totalChecked, "KDTree does not have the right number of elements")
     }
 
     @Test
@@ -93,6 +108,7 @@ internal class KDTreeTest {
 
         assertEquals(4, neighbors.size, "Wrong number of neighbors found")
 
+        //nearest neighbors to (0,0) are all 1 unit away
         assertTrue(
                 neighbors.all { it.distance == 1.0 },
                 "Nearest neighbors not found"

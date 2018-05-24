@@ -31,8 +31,14 @@ class KDNode(
         return location.hashCode()
     }
 
+
+
     override fun compareTo(other: KDNode): Int {
         return location.compareTo(other.location)
+    }
+
+    override fun toString(): String {
+        return "KDNode(location=$location, plane=$plane, hasLess=${less != null}, hasGreater=${greater != null})"
     }
 
 }
@@ -68,10 +74,10 @@ class KDTree(data: MutableList<Locatable>) {
             )
         }
 
-        if (data.size == 0)
-            this.root = KDNode()
-        else
-            this.root = buildTree(data)!! //NPE avoided by size check above
+        this.root = when {
+            data.size == 0 -> KDNode()
+            else -> buildTree(data)!! //NPE avoided by size check above
+        }
     }
 
 
