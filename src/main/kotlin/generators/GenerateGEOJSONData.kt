@@ -15,6 +15,7 @@ import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 import kotlin.text.Charsets.UTF_8
 
+
 /**
  * This script pulls data from the ViewerTable dynamodb
  * and generates a set of GEOJson files for use with mapbox.
@@ -23,6 +24,7 @@ import kotlin.text.Charsets.UTF_8
  * that we want to show on the map
  */
 fun main(args: Array<String>) {
+
     //Load the data from Dynamo
     val dynamo = AmazonDynamoDBAsyncClientBuilder.standard()
             .withRegion("us-east-1")
@@ -43,13 +45,11 @@ fun main(args: Array<String>) {
                 "type": "FeatureCollection",
                 "features": [""".trimIndent())
 
-    val propOut = File("props.txt").bufferedWriter()
 
     val resultsIter = rawResults.iterator()
-    var count = 0
     while (resultsIter.hasNext()) {
         val video = resultsIter.next()!!
-        if (video.lat != null && video.lng != null) {
+        if (video.lat != null && video.lng != null && video.assessment != null && video.appraisal != null) {
             var propertyString = """
             "lng": "${video.lng}",
             "lat": "${video.lat}",
@@ -60,7 +60,6 @@ fun main(args: Array<String>) {
                     if (weight != null && weight.toString().isNotEmpty()) {
                         val prop = """"${member.name}": ${weight.toString()}"""
                         if (!prop.endsWith(" ")) {
-                            propOut.write("$prop~~~\n")
                             propertyString = """$propertyString,
                             $prop"""
                         }
@@ -80,7 +79,12 @@ fun main(args: Array<String>) {
             if (resultsIter.hasNext())
                 out.write(",")
 
-            if (count < 25) {
+
+            val lat = video.lat!!
+            val lng = video.lng!!
+            if (35.946846 > lat && lat > 35.9260523 &&
+                    -83.956160 > lng && lng > -83.980512
+            ) {
                 smallOut.write("""{
                         "type": "Feature",
                         "properties": {
@@ -89,19 +93,16 @@ fun main(args: Array<String>) {
                         "geometry": {
                             "type": "Point",
                             "coordinates": [ ${video.lng}, ${video.lat} ]
-                        }}""".trimIndent()
+                        }},""".trimIndent()
                 )
-                if (resultsIter.hasNext() && count < 24)
-                    smallOut.write(",")
             }
 
         }
-        count++
     }
+    smallOut.write("{}")
 
     out.flush()
     smallOut.flush()
-    propOut.flush()
 
     val s3 = AmazonS3ClientBuilder.standard()
             .withCredentials(ProfileCredentialsProvider("spatial-data"))

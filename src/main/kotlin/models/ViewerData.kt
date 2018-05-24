@@ -44,5 +44,13 @@ class ViewerData(
 
         @get:DynamoDBTypeConverted(converter = StringDoubleConverter::class)
         @get:DynamoDBAttribute(attributeName = "YearAssessed")
-        var yearAssessed: Double? = null
-)
+        var yearAssessed: Double? = null) : Locatable {
+
+    override val location = Point(lat ?: 0.0, lng ?: 0.0)
+
+    override fun toString(): String {
+        return "ViewerData(parcelId='$parcelId', lat=$lat, lng=$lng, appraisal=$appraisal, assessment=$assessment)"
+    }
+
+
+}
